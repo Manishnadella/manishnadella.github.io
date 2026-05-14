@@ -1,16 +1,13 @@
 // ─── chatbot.js ───────────────────────────────────────────────────────────────
-// Groq-powered RAG chatbot for Manish Nadella's portfolio.
+// Portfolio chatbot — calls your own Netlify function (no API key in browser)
 // Depends on: context.js (must be loaded first)
-// Get a FREE Groq API key at https://console.groq.com → API Keys
-// Free tier: 14,400 requests/day, no credit card needed
 // ──────────────────────────────────────────────────────────────────────────────
 
 (function () {
 
   // ── CONFIG ──────────────────────────────────────────────────────────────────
-  const GROQ_API_KEY = (typeof GROQ_CONFIG_KEY !== 'undefined') ? GROQ_CONFIG_KEY : '';
-  const GROQ_MODEL   = 'llama-3.1-8b-instant';    // free, fast, great for Q&A
-  const GROQ_URL     = 'https://api.groq.com/openai/v1/chat/completions';
+  // This calls YOUR Netlify function — no API key needed here at all
+  const PROXY_URL = '/.netlify/functions/chat';
 
   const TOP_K         = 5;
   const CHUNK_SIZE    = 600;
@@ -85,39 +82,24 @@ ${context}
 --- END OF CONTEXT ---`;
   }
 
-  // ── GROQ API CALL ───────────────────────────────────────────────────────────
-  async function askGroq(userMessage, chunks) {
+  // ── PROXY CALL ──────────────────────────────────────────────────────────────
+  async function askProxy(userMessage, chunks) {
     const relevant     = retrieveChunks(userMessage, chunks, TOP_K);
     const systemPrompt = buildSystemPrompt(relevant);
 
-    const body = {
-      model: GROQ_MODEL,
-      temperature: 0.2,
-      max_tokens: 512,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userMessage  }
-      ]
-    };
-
-    const res = await fetch(GROQ_URL, {
+    const res = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify(body)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userMessage, systemPrompt })
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      const msg = err?.error?.message || `HTTP ${res.status}`;
-      throw new Error(msg);
+      throw new Error(err?.error || `HTTP ${res.status}`);
     }
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content
-      || "I couldn't generate a response. Please try again.";
+    return data?.reply || "I couldn't generate a response. Please try again.";
   }
 
   // ── DOM HELPERS ─────────────────────────────────────────────────────────────
@@ -170,11 +152,6 @@ ${context}
       input.value = '';
       addMessage(msgs, text, 'user');
 
-      if (GROQ_API_KEY === 'YOUR_GROQ_API_KEY_HERE') {
-        addMessage(msgs, '⚠ Groq API key not configured. Add your key to chatbot.js to enable the assistant.', 'bot');
-        return;
-      }
-
       isWaiting = true;
       sendBtn.disabled = true;
       sendBtn.style.opacity = '0.5';
@@ -182,13 +159,13 @@ ${context}
       const typing = addTypingIndicator(msgs);
 
       try {
-        const reply = await askGroq(text, chunks);
+        const reply = await askProxy(text, chunks);
         typing.remove();
         addMessage(msgs, reply, 'bot');
       } catch (err) {
         typing.remove();
         addMessage(msgs, '⚠ Something went wrong. Please try again.', 'bot');
-        console.error('[chatbot.js] Groq error:', err);
+        console.error('[chatbot.js] Chat error:', err);
       } finally {
         isWaiting = false;
         sendBtn.disabled = false;

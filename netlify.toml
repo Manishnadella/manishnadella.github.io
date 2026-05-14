@@ -1,0 +1,15 @@
+# ─── netlify.toml ─────────────────────────────────────────────────────────────
+# Tells Netlify where your functions live and sets the publish directory.
+# Place this file in the ROOT of your repository.
+# ──────────────────────────────────────────────────────────────────────────────
+
+[build]
+  publish   = "."           # your HTML files are in the root
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin  = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "POST, OPTIONS"
